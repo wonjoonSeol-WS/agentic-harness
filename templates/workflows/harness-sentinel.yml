@@ -50,7 +50,7 @@ jobs:
             Investigate the alert, find root cause, assess rollback feasibility, and output recommendations.
           allowed_tools: "Read,Bash,Grep,Glob"
           model: "claude-opus-4-6"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         env:
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DATADOG_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}

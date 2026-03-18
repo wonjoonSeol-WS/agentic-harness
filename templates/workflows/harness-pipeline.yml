@@ -112,7 +112,7 @@ jobs:
             Post the plan as a comment on the issue, ending with "Reply with /approve to start execution."
           allowed_tools: "Read,Bash,Grep,Glob"
           model: "claude-opus-4-6"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # Execute: agent writes code, creates branch
@@ -151,7 +151,7 @@ jobs:
             Implement the approved plan for issue #${{ github.event.issue.number }}.
           allowed_tools: "Read,Write,Edit,Bash,Grep,Glob"
           model: "claude-opus-4-6"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
       - name: Push branch and output name
         id: branch
@@ -190,7 +190,7 @@ jobs:
             Review the current branch diff and post review comments on the PR.
           allowed_tools: "Read,Bash,Grep,Glob"
           model: "claude-opus-4-6"
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # Create PR: after execution and review are complete
