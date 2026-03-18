@@ -77,7 +77,7 @@ jobs:
           ISSUE_BODY=$(gh issue view ${{ github.event.issue.number }} --json body -q .body)
           ISSUE_TITLE=$(gh issue view ${{ github.event.issue.number }} --json title -q .title)
 
-          claude -p \
+          claude -p --allowedTools "Read,Bash,Grep,Glob" \
             "You are in the PLAN phase.
             Read prompts/planner.md for your full instructions.
             Read AGENTS.md and harness.yml for project context.
@@ -122,7 +122,7 @@ jobs:
         run: |
           ISSUE_BODY=$(gh issue view ${{ github.event.issue.number }} --json body -q .body)
 
-          claude -p \
+          claude -p --allowedTools "Read,Write,Edit,Bash,Grep,Glob" \
             "You are in the EXECUTE phase.
             Read prompts/executor.md for your full instructions.
             Read harness.yml for verification commands (execution.post_commands).
@@ -170,7 +170,7 @@ jobs:
             PROMPT_FILE="reviewer-nonfunctional.md"
           fi
 
-          claude -p \
+          claude -p --allowedTools "Read,Bash,Grep,Glob" \
             "You are in the ${{ matrix.perspective }} phase.
             Read prompts/${PROMPT_FILE} for your instructions.
             Read AGENTS.md for project context.
