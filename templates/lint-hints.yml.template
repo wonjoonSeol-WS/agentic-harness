@@ -1,0 +1,78 @@
+# .harness/lint-hints.yml
+# Agent-friendly fix instructions for linter errors.
+# Used by lint-formatter.sh to append actionable hints to linter output.
+#
+# When a linter error matches a rule pattern, the fix instruction
+# is appended so the AI agent knows exactly what to do.
+#
+# Copy this file to .harness/lint-hints.yml in your project and customize
+# the rules for your linters and conventions.
+
+# Default fix command (used when no specific rule matches)
+default_fix_command: "./gradlew ktlintFormat"
+
+rules:
+  # -- Kotlin (ktlint) --------------------------------------------------------
+  no-wildcard-imports:
+    pattern: "no-wildcard-imports|Wildcard import"
+    fix: "Replace `import foo.*` with explicit imports for each used class. List all used types and import them individually."
+    ref: "AGENTS.md#imports"
+
+  standard-indent:
+    pattern: "standard:indent|Unexpected indentation"
+    fix: "Fix indentation to use 4 spaces consistently. Run: ./gradlew ktlintFormat"
+
+  no-unused-imports:
+    pattern: "no-unused-imports|Unused import"
+    fix: "Remove the unused import statement entirely."
+
+  standard-no-empty-class-body:
+    pattern: "no-empty-class-body"
+    fix: "Remove the empty class body `{}` -- use the class declaration without braces."
+
+  # -- Kotlin (detekt) --------------------------------------------------------
+  TooManyFunctions:
+    pattern: "TooManyFunctions"
+    fix: "This class has too many functions. Extract related functions into a separate class or use extension functions."
+
+  LongMethod:
+    pattern: "LongMethod|LongParameterList"
+    fix: "This method is too long. Extract sub-operations into private helper methods, each with a clear single responsibility."
+
+  MagicNumber:
+    pattern: "MagicNumber"
+    fix: "Replace magic numbers with named constants. Use `companion object` to define them."
+
+  # -- TypeScript (eslint) -----------------------------------------------------
+  no-any:
+    pattern: "@typescript-eslint/no-explicit-any|no-any"
+    fix: "Replace `any` with a specific type. If the type is truly unknown, use `unknown` and narrow with type guards."
+
+  no-unused-vars:
+    pattern: "no-unused-vars|@typescript-eslint/no-unused-vars"
+    fix: "Remove the unused variable, or prefix with `_` if it is intentionally unused (e.g., destructuring)."
+
+  prefer-const:
+    pattern: "prefer-const"
+    fix: "Change `let` to `const` since this variable is never reassigned."
+
+  # -- Python (ruff / flake8) --------------------------------------------------
+  E501:
+    pattern: "E501|line too long"
+    fix: "Break the line into multiple lines. For strings, use implicit concatenation. For function calls, put each argument on its own line."
+
+  F401:
+    pattern: "F401|imported but unused"
+    fix: "Remove the unused import."
+
+  F841:
+    pattern: "F841|local variable.*assigned.*never used"
+    fix: "Remove the unused variable assignment, or prefix with `_` if intentional."
+
+  E711:
+    pattern: "E711|comparison to None"
+    fix: "Use `is None` or `is not None` instead of `== None` or `!= None`."
+
+  # -- General (catch-all) -----------------------------------------------------
+  _default:
+    fix: "Run the auto-formatter to fix: {default_fix_command}"

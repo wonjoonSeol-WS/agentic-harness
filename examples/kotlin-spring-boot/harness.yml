@@ -1,0 +1,54 @@
+# =============================================================================
+# Agentic Harness — Kotlin Spring Boot Example
+#
+# Complete configuration for a Kotlin Spring Boot project with Clean Architecture,
+# ktlint enforcement, and Kotest/MockK testing.
+# =============================================================================
+version: "1"
+
+project:
+  name: "my-kotlin-api"
+  language: "kotlin"
+  # Optional: path to AGENTS.md if not in project root
+  # agents_md: "AGENTS.md"
+
+# -- AI Agent Configuration --------------------------------------------------
+agent:
+  provider: "claude"
+  model: "claude-opus-4-6"
+  # Auth is configured in .github/workflows/ via env vars, not here.
+
+# -- Execution Pipeline ------------------------------------------------------
+execution:
+  # Commands run BEFORE the agent writes code (formatting, cleanup)
+  pre_commands:
+    - "./gradlew ktlintFormat"
+
+  # Commands run AFTER the agent writes code (compile, test, lint, architecture)
+  post_commands:
+    - "./gradlew compileKotlin"
+    - "./gradlew test"
+    - "lint-formatter.sh './gradlew ktlintCheck' --hints .harness/lint-hints.yml"
+    - "./gradlew detekt"
+    - "check-layer-imports.sh --config .harness/layers.yml"
+
+  # Branch naming pattern. Placeholders: {issue_number}, {issue_title_slug}
+  branch_pattern: "harness/{issue_number}-{issue_title_slug}"
+
+  # Maximum number of self-correction attempts when post_commands fail
+  max_retries: 3
+
+# -- Jira Integration (optional) ---------------------------------------------
+# jira:
+#   enabled: true
+#   project_key: "PROJ"
+#   base_url: "https://yourorg.atlassian.net"
+#   transition_on_pr: "In Review"
+#   transition_on_merge: "Done"
+
+# -- Notifications (optional) ------------------------------------------------
+# notifications:
+#   slack:
+#     webhook_secret: "SLACK_WEBHOOK_URL"
+#     channel: "#agentic-harness"
+#     on: [plan_ready, pr_created, complete]

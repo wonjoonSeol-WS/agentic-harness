@@ -1,0 +1,48 @@
+# =============================================================================
+# Agentic Harness — TypeScript Next.js Example
+#
+# Complete configuration for a Next.js 15+ TypeScript project with App Router,
+# Tailwind CSS, shadcn/ui components, and React Query data fetching.
+# =============================================================================
+version: "1"
+
+project:
+  name: "my-nextjs-app"
+  language: "typescript"
+
+# -- AI Agent Configuration --------------------------------------------------
+agent:
+  provider: "claude"
+  model: "claude-opus-4-6"
+
+# -- Execution Pipeline ------------------------------------------------------
+execution:
+  # Commands run BEFORE the agent writes code
+  pre_commands:
+    - "pnpm lint --fix"
+    - "pnpm prettier --write ."
+
+  # Commands run AFTER the agent writes code (type-check, test, build)
+  post_commands:
+    - "pnpm type-check"
+    - "pnpm test"
+    - "pnpm build"
+
+  # Branch naming pattern
+  branch_pattern: "harness/{issue_number}-{issue_title_slug}"
+
+  # Maximum number of self-correction attempts when post_commands fail
+  max_retries: 3
+
+# -- Jira Integration (optional) ---------------------------------------------
+# jira:
+#   enabled: true
+#   project_key: "PROJ"
+#   base_url: "https://yourorg.atlassian.net"
+
+# -- Notifications (optional) ------------------------------------------------
+# notifications:
+#   slack:
+#     webhook_secret: "SLACK_WEBHOOK_URL"
+#     channel: "#agentic-harness"
+#     on: [plan_ready, pr_created, complete]

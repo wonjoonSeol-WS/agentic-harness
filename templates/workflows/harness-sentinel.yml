@@ -1,0 +1,103 @@
+name: Agentic Harness — Sentinel
+
+# Triggered by repository_dispatch from a Slack bot or webhook
+on:
+  repository_dispatch:
+    types: [alert-triggered]
+  # Or manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      alert_message:
+        description: 'Alert message text'
+        required: true
+      service:
+        description: 'Affected service name'
+        required: true
+      severity:
+        description: 'Alert severity (warning/critical)'
+        default: 'warning'
+
+concurrency:
+  group: sentinel-${{ github.event.client_payload.service || github.event.inputs.service }}
+  cancel-in-progress: true  # Latest alert takes priority
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  investigate:
+    name: Investigate Alert
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Run Investigation Agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are in the INVESTIGATE phase.
+            Read prompts/incident-investigator.md for your full instructions.
+            Read AGENTS.md and ARCHITECTURE.md for project context.
+
+            Alert: ${{ github.event.client_payload.alert_message || github.event.inputs.alert_message }}
+            Service: ${{ github.event.client_payload.service || github.event.inputs.service }}
+            Severity: ${{ github.event.client_payload.severity || github.event.inputs.severity }}
+
+            Investigate the alert, find root cause, assess rollback feasibility, and output recommendations.
+          allowed_tools: "Read,Bash,Grep,Glob"
+          model: "claude-opus-4-6"
+        env:
+          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DATADOG_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Create hotfix issue if needed
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const outputPath = '/tmp/harness-output.md';
+            if (!fs.existsSync(outputPath)) {
+              console.log('No investigation output found');
+              return;
+            }
+            const output = fs.readFileSync(outputPath, 'utf8');
+
+            // Try to parse JSON from the output
+            const jsonMatch = output.match(/```json\n([\s\S]*?)\n```/) || [null, output];
+            let result;
+            try {
+              result = JSON.parse(jsonMatch[1]);
+            } catch (e) {
+              console.log('Could not parse investigation output as JSON');
+              // Post raw output as an issue comment instead
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[Sentinel] Alert investigation: ${process.env.ALERT_SERVICE}`,
+                body: `## Investigation Output\n\n${output}\n\n---\nTriggered by alert at ${new Date().toISOString()}`,
+                labels: ['auto', 'sentinel']
+              });
+              return;
+            }
+
+            // Create issue if code fix is recommended
+            if (result.create_issue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: result.create_issue.title,
+                body: result.create_issue.body,
+                labels: result.create_issue.labels || ['auto', 'hotfix']
+              });
+              console.log(`Created hotfix issue: ${result.create_issue.title}`);
+            }

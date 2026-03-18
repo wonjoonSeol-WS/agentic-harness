@@ -1,0 +1,251 @@
+# =============================================================================
+# Agentic Harness Pipeline
+# =============================================================================
+# Workflow-driven orchestrator: GitHub Actions steps ARE the state machine.
+#
+# Flow:
+#   1. Issue labeled "auto"  -> Plan Agent generates plan, posts as comment
+#   2. Human approves        -> Executor Agent writes code (runs tests itself)
+#   3. Reviewer Agent checks -> Creates PR if clean
+#   4. CI gate (separate workflow) -> final safety net
+#
+# Setup:
+#   1. Copy this file to .github/workflows/harness-pipeline.yml
+#   2. Configure auth secrets (see env block below)
+#   3. Ensure harness.yml exists in your repository root
+# =============================================================================
+
+name: Agentic Harness Pipeline
+
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: harness-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate: determine what phase to run based on event
+  # ---------------------------------------------------------------------------
+  gate:
+    name: Check Trigger
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      phase: ${{ steps.check.outputs.phase }}
+    steps:
+      - name: Evaluate trigger
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { payload } = context;
+            const labels = payload.issue?.labels?.map(l => l.name) || [];
+
+            // New issue labeled 'auto' -> plan phase
+            if (payload.action === 'labeled' && payload.label?.name === 'auto') {
+              core.setOutput('should_run', 'true');
+              core.setOutput('phase', 'plan');
+              return;
+            }
+
+            // Comment on an auto-labeled issue
+            if (payload.action === 'created' && labels.includes('auto')) {
+              // Skip bot comments to avoid infinite loops
+              if (payload.comment?.user?.type === 'Bot') {
+                core.setOutput('should_run', 'false');
+                return;
+              }
+              const body = (payload.comment?.body || '').toLowerCase();
+              const approvalWords = ['approved', '/approve', 'lgtm', 'go ahead', 'ok'];
+              const isApproval = approvalWords.some(w => body.includes(w));
+
+              if (isApproval && labels.includes('harness:planning')) {
+                core.setOutput('should_run', 'true');
+                core.setOutput('phase', 'execute');
+              } else {
+                core.setOutput('should_run', 'false');
+              }
+              return;
+            }
+
+            core.setOutput('should_run', 'false');
+
+  # ---------------------------------------------------------------------------
+  # Plan: agent generates implementation plan
+  # ---------------------------------------------------------------------------
+  plan:
+    name: Plan
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true' && needs.gate.outputs.phase == 'plan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add planning label
+        run: gh issue edit ${{ github.event.issue.number }} --add-label "harness:planning"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Plan Agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are in the PLAN phase.
+            Read prompts/planner.md for your full instructions.
+            Read AGENTS.md, ARCHITECTURE.md, and harness.yml for project context.
+
+            Create an implementation plan for issue #${{ github.event.issue.number }}.
+            Post the plan as a comment on the issue, ending with "Reply with /approve to start execution."
+          allowed_tools: "Read,Bash,Grep,Glob"
+          model: "claude-opus-4-6"
+        env:
+          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          # Or: ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+  # ---------------------------------------------------------------------------
+  # Execute: agent writes code, creates branch
+  # ---------------------------------------------------------------------------
+  execute:
+    name: Execute
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true' && needs.gate.outputs.phase == 'execute'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      branch: ${{ steps.branch.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Shallow clone for large repos. Override in harness.yml: execution.checkout_depth
+          fetch-depth: 50
+
+      - name: Update label
+        run: |
+          gh issue edit ${{ github.event.issue.number }} \
+            --remove-label "harness:planning" --add-label "harness:executing"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Executor Agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are in the EXECUTE phase.
+            Read prompts/executor.md for your full instructions.
+            Read harness.yml for verification commands (execution.post_commands) and scope (execution.scope).
+            Read AGENTS.md, ARCHITECTURE.md for project context.
+
+            Implement the approved plan for issue #${{ github.event.issue.number }}.
+          allowed_tools: "Read,Write,Edit,Bash,Grep,Glob"
+          model: "claude-opus-4-6"
+        env:
+          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+
+      - name: Push branch and output name
+        id: branch
+        run: |
+          BRANCH="$(git branch --show-current)"
+          git push origin "$BRANCH" --force-with-lease
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Review: run functional and NFR reviewers in parallel
+  # ---------------------------------------------------------------------------
+  review:
+    name: Review (${{ matrix.perspective }})
+    needs: execute
+    strategy:
+      matrix:
+        perspective: [review-functional, review-nonfunctional]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.execute.outputs.branch }}
+          fetch-depth: 50
+
+      - name: Run Reviewer
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You are in the ${{ matrix.perspective }} phase.
+            Read prompts/${{ matrix.perspective == 'review-functional' && 'reviewer-functional.md' || 'reviewer-nonfunctional.md' }} for your instructions.
+            Read AGENTS.md, ARCHITECTURE.md for project context.
+
+            Review the current branch diff and post review comments on the PR.
+          allowed_tools: "Read,Bash,Grep,Glob"
+          model: "claude-opus-4-6"
+        env:
+          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Create PR: after execution and review are complete
+  # ---------------------------------------------------------------------------
+  create-pr:
+    name: Create PR
+    needs: [execute, review]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.execute.outputs.branch }}
+
+      - name: Create PR
+        run: |
+          BRANCH="${{ needs.execute.outputs.branch }}"
+          TITLE="$(gh issue view ${{ github.event.issue.number }} --json title -q .title)"
+          gh pr create \
+            --head "$BRANCH" \
+            --title "feat: ${TITLE}" \
+            --body "Closes #${{ github.event.issue.number }}
+
+          Automated by Agentic Harness." \
+            --label "agentic-harness"
+          gh issue edit ${{ github.event.issue.number }} \
+            --remove-label "harness:executing" --add-label "harness:in-review"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Failure reporting
+  # ---------------------------------------------------------------------------
+  report-failure:
+    name: Report Failure
+    needs: [gate, plan, execute, review, create-pr]
+    if: always() && (needs.plan.result == 'failure' || needs.execute.result == 'failure' || needs.review.result == 'failure' || needs.create-pr.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post failure comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue_number = context.payload.issue?.number;
+            if (!issue_number) return;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              body: [
+                '## Agentic Harness Pipeline Failed',
+                '',
+                `See the [workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`,
+                '',
+                'You can re-trigger by removing and re-adding the `auto` label.',
+              ].join('\n'),
+            });

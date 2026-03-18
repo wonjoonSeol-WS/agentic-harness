@@ -1,0 +1,43 @@
+# =============================================================================
+# Agentic Harness — CI Gate
+# =============================================================================
+# Runs post_commands from harness.yml as the final safety net on PRs
+# created by the harness. This is NOT an agent — just mechanical verification.
+#
+# Setup: Copy this file to .github/workflows/harness-ci.yml
+# =============================================================================
+
+name: Agentic Harness — CI Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  ci-gate:
+    name: CI Gate
+    if: contains(github.event.pull_request.labels.*.name, 'agentic-harness')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          if ! command -v yq &>/dev/null; then
+            sudo wget -qO /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+
+      - name: Run post_commands
+        run: |
+          yq -r '.execution.post_commands[]? // empty' harness.yml | while IFS= read -r cmd; do
+            [ -z "$cmd" ] && continue
+            echo "::group::$cmd"
+            eval "$cmd" || { echo "::error::FAILED: $cmd"; exit 1; }
+            echo "::endgroup::"
+          done

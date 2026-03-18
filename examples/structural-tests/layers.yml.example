@@ -1,0 +1,25 @@
+# .harness/layers.yml
+# Layer architecture definition for check-layer-imports.sh
+#
+# Each layer lists which other layers it is allowed to import from.
+# Imports flow inward: outer layers depend on inner layers, never the reverse.
+#
+# This example shows a Kotlin Spring Boot Clean Architecture layout.
+# Customize the names and paths to match your project.
+
+layers:
+  - name: entity
+    path: "core/entity/**"
+    can_import: []
+
+  - name: repository
+    path: "core/repository/**"
+    can_import: [entity]
+
+  - name: service
+    path: "core/service/**"
+    can_import: [entity, repository]
+
+  - name: api
+    path: "app/api/**"
+    can_import: [entity, service]

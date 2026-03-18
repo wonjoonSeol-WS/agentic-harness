@@ -1,0 +1,26 @@
+# .harness/domains.yml
+# Domain boundary definitions for check-domain-boundaries.sh
+#
+# Each domain defines its root path and its public API path.
+# Cross-domain imports are only allowed through the public_api path.
+# Internal files (outside public_api) must not be imported by other domains.
+#
+# This example shows a microservices-style layout.
+# Customize the domains and paths to match your project.
+
+domains:
+  auth:
+    path: "services/auth/"
+    public_api: "services/auth/api/"
+
+  payment:
+    path: "services/payment/"
+    public_api: "services/payment/api/"
+
+  notification:
+    path: "services/notification/"
+    public_api: "services/notification/api/"
+
+  common:
+    path: "core/common/"
+    public_api: "core/common/"  # common is fully public

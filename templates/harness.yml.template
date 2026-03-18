@@ -1,0 +1,52 @@
+# =============================================================================
+# Agentic Harness Configuration
+# =============================================================================
+# Copy this file to your project root as `harness.yml`.
+#
+# This file is read by:
+#   - The agent (reads post_commands, scope, project info)
+#   - The CI gate workflow (reads post_commands)
+#
+# Auth is configured in the workflow files, not here.
+# =============================================================================
+
+version: "1"
+
+# -- Project Metadata --------------------------------------------------------
+project:
+  name: "my-project"
+  language: "kotlin"                    # kotlin | typescript | python | java | go
+
+# -- Execution ---------------------------------------------------------------
+# Commands run after the agent writes code. The agent reads these from this
+# file and runs them. CI also runs them as a final safety net.
+execution:
+  post_commands: []
+  # Examples:
+  #   Kotlin: ["./gradlew ktlintFormat", "./gradlew compileKotlin", "./gradlew test"]
+  #   TypeScript: ["pnpm lint --fix", "pnpm type-check", "pnpm test"]
+  #   Python: ["ruff check --fix .", "black .", "pytest", "mypy ."]
+
+  # Scope: restrict the agent to these paths only (essential for monorepos).
+  # scope:
+  #   - "services/auth/"
+  #   - "core/common/"
+
+  # Optional: wrap linters with agent-friendly error messages.
+  #   post_commands:
+  #     - "lint-formatter.sh './gradlew ktlintCheck' --hints .harness/lint-hints.yml"
+  # See templates/lint-hints.yml.template for examples.
+
+  # Optional: structural tests to enforce architecture rules.
+  #   post_commands:
+  #     - "check-layer-imports.sh --config .harness/layers.yml"
+  # See examples/structural-tests/ for scripts.
+
+# -- Recommended docs/ structure (for agent context navigation) --------------
+# The agent reads AGENTS.md, ARCHITECTURE.md, CLAUDE.md, and module docs
+# on its own. For better context, create:
+#   docs/
+#     design-docs/      — Why decisions were made
+#     exec-plans/       — Step-by-step implementation plans
+#     product-specs/    — What to build
+#     references/       — External links, API docs

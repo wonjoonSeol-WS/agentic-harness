@@ -1,0 +1,48 @@
+# =============================================================================
+# Agentic Harness — Python FastAPI Example
+#
+# Complete configuration for a Python FastAPI project with async endpoints,
+# SQLAlchemy ORM, Pydantic schemas, and comprehensive linting (ruff, black, mypy).
+# =============================================================================
+version: "1"
+
+project:
+  name: "my-fastapi-service"
+  language: "python"
+
+# -- AI Agent Configuration --------------------------------------------------
+agent:
+  provider: "claude"
+  model: "claude-opus-4-6"
+
+# -- Execution Pipeline ------------------------------------------------------
+execution:
+  # Commands run BEFORE the agent writes code (formatting, auto-fix)
+  pre_commands:
+    - "ruff check --fix ."
+    - "black ."
+
+  # Commands run AFTER the agent writes code (test, type-check, lint)
+  post_commands:
+    - "pytest"
+    - "mypy ."
+    - "ruff check ."
+
+  # Branch naming pattern
+  branch_pattern: "harness/{issue_number}-{issue_title_slug}"
+
+  # Maximum number of self-correction attempts when post_commands fail
+  max_retries: 3
+
+# -- Jira Integration (optional) ---------------------------------------------
+# jira:
+#   enabled: true
+#   project_key: "PROJ"
+#   base_url: "https://yourorg.atlassian.net"
+
+# -- Notifications (optional) ------------------------------------------------
+# notifications:
+#   slack:
+#     webhook_secret: "SLACK_WEBHOOK_URL"
+#     channel: "#agentic-harness"
+#     on: [plan_ready, pr_created, complete]
