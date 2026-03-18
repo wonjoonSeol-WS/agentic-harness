@@ -146,9 +146,44 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  review:
+    name: Review (${{ matrix.perspective }})
+    needs: execute
+    strategy:
+      matrix:
+        perspective: [review-functional, review-nonfunctional]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.execute.outputs.branch }}
+          fetch-depth: 50
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Reviewer
+        run: |
+          PROMPT_FILE="reviewer-functional.md"
+          if [ "${{ matrix.perspective }}" = "review-nonfunctional" ]; then
+            PROMPT_FILE="reviewer-nonfunctional.md"
+          fi
+
+          claude -p \
+            "You are in the ${{ matrix.perspective }} phase.
+            Read prompts/${PROMPT_FILE} for your instructions.
+            Read AGENTS.md for project context.
+
+            Review the changes on this branch (use git diff main...HEAD).
+            Post your findings as a comment on issue #${{ github.event.issue.number }} using gh issue comment."
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   create-pr:
     name: Create PR
-    needs: execute
+    needs: [execute, review]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -173,8 +208,8 @@ jobs:
 
   report-failure:
     name: Report Failure
-    needs: [gate, plan, execute, create-pr]
-    if: always() && (needs.plan.result == 'failure' || needs.execute.result == 'failure' || needs.create-pr.result == 'failure')
+    needs: [gate, plan, execute, review, create-pr]
+    if: always() && (needs.plan.result == 'failure' || needs.execute.result == 'failure' || needs.review.result == 'failure' || needs.create-pr.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: Post failure comment
