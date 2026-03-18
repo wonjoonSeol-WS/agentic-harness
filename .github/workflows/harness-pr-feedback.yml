@@ -48,5 +48,4 @@ jobs:
             Address the review feedback, fix the code, run verification commands, commit and push.
           allowed_tools: "Read,Write,Edit,Bash,Grep,Glob"
           model: "claude-opus-4-6"
-        env:
-          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}

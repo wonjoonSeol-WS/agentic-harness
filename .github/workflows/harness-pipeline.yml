@@ -93,7 +93,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Add planning label
-        run: gh issue edit ${{ github.event.issue.number }} --add-label "harness:planning"
+        run: |
+          gh label create "harness:planning" --color 0E8A16 --force 2>/dev/null || true
+          gh issue edit ${{ github.event.issue.number }} --add-label "harness:planning"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -109,9 +111,7 @@ jobs:
             Post the plan as a comment on the issue, ending with "Reply with /approve to start execution."
           allowed_tools: "Read,Bash,Grep,Glob"
           model: "claude-opus-4-6"
-        env:
-          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
-          # Or: ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ---------------------------------------------------------------------------
   # Execute: agent writes code, creates branch
@@ -132,6 +132,7 @@ jobs:
 
       - name: Update label
         run: |
+          gh label create "harness:executing" --color 1D76DB --force 2>/dev/null || true
           gh issue edit ${{ github.event.issue.number }} \
             --remove-label "harness:planning" --add-label "harness:executing"
         env:
@@ -149,8 +150,7 @@ jobs:
             Implement the approved plan for issue #${{ github.event.issue.number }}.
           allowed_tools: "Read,Write,Edit,Bash,Grep,Glob"
           model: "claude-opus-4-6"
-        env:
-          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
       - name: Push branch and output name
         id: branch
@@ -189,8 +189,7 @@ jobs:
             Review the current branch diff and post review comments on the PR.
           allowed_tools: "Read,Bash,Grep,Glob"
           model: "claude-opus-4-6"
-        env:
-          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
   # ---------------------------------------------------------------------------
   # Create PR: after execution and review are complete
@@ -216,6 +215,8 @@ jobs:
 
           Automated by Agentic Harness." \
             --label "agentic-harness"
+          gh label create "harness:in-review" --color D93F0B --force 2>/dev/null || true
+          gh label create "agentic-harness" --color 5319E7 --force 2>/dev/null || true
           gh issue edit ${{ github.event.issue.number }} \
             --remove-label "harness:executing" --add-label "harness:in-review"
         env:

@@ -50,8 +50,8 @@ jobs:
             Investigate the alert, find root cause, assess rollback feasibility, and output recommendations.
           allowed_tools: "Read,Bash,Grep,Glob"
           model: "claude-opus-4-6"
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
         env:
-          CLAUDE_ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
           DATADOG_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DATADOG_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
