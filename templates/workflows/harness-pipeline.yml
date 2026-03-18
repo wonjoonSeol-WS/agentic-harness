@@ -109,10 +109,14 @@ jobs:
             Read AGENTS.md, ARCHITECTURE.md, and harness.yml for project context.
 
             Create an implementation plan for issue #${{ github.event.issue.number }}.
-            Post the plan as a comment on the issue, ending with "Reply with /approve to start execution."
-          allowed_tools: "Read,Bash,Grep,Glob"
-          model: "claude-opus-4-6"
+
+            IMPORTANT: After creating the plan, you MUST post it as a comment on the issue using:
+            gh issue comment ${{ github.event.issue.number }} --body "YOUR_PLAN_HERE"
+
+            End the comment with: "Reply with /approve to start execution."
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # Execute: agent writes code, creates branch
