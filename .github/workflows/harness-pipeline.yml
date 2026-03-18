@@ -77,19 +77,20 @@ jobs:
           ISSUE_BODY=$(gh issue view ${{ github.event.issue.number }} --json body -q .body)
           ISSUE_TITLE=$(gh issue view ${{ github.event.issue.number }} --json title -q .title)
 
-          claude -p --allowedTools "Read,Bash,Grep,Glob" \
-            "You are in the PLAN phase.
-            Read prompts/planner.md for your full instructions.
-            Read AGENTS.md and harness.yml for project context.
+          cat <<PROMPT | claude -p --allowedTools "Read,Bash,Grep,Glob" -
+          You are in the PLAN phase.
+          Read prompts/planner.md for your full instructions.
+          Read AGENTS.md and harness.yml for project context.
 
-            Issue #${{ github.event.issue.number }}: ${ISSUE_TITLE}
+          Issue #${{ github.event.issue.number }}: ${ISSUE_TITLE}
 
-            ${ISSUE_BODY}
+          ${ISSUE_BODY}
 
-            After creating your plan, post it as a comment on issue #${{ github.event.issue.number }} using:
-            gh issue comment ${{ github.event.issue.number }} --body '<your plan>'
+          After creating your plan, post it as a comment on issue #${{ github.event.issue.number }} using:
+          gh issue comment ${{ github.event.issue.number }} --body 'your plan here'
 
-            End the comment with: Reply with /approve to start execution."
+          End the comment with: Reply with /approve to start execution.
+          PROMPT
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -122,17 +123,18 @@ jobs:
         run: |
           ISSUE_BODY=$(gh issue view ${{ github.event.issue.number }} --json body -q .body)
 
-          claude -p --allowedTools "Read,Write,Edit,Bash,Grep,Glob" \
-            "You are in the EXECUTE phase.
-            Read prompts/executor.md for your full instructions.
-            Read harness.yml for verification commands (execution.post_commands).
-            Read AGENTS.md for project context.
+          cat <<PROMPT | claude -p --allowedTools "Read,Write,Edit,Bash,Grep,Glob" -
+          You are in the EXECUTE phase.
+          Read prompts/executor.md for your full instructions.
+          Read harness.yml for verification commands (execution.post_commands).
+          Read AGENTS.md for project context.
 
-            Implement the approved plan for issue #${{ github.event.issue.number }}.
+          Implement the approved plan for issue #${{ github.event.issue.number }}.
 
-            ${ISSUE_BODY}
+          ${ISSUE_BODY}
 
-            Create a new branch, write the code, run verification commands, fix failures, commit and push."
+          Create a new branch, write the code, run verification commands, fix failures, commit and push.
+          PROMPT
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -170,13 +172,14 @@ jobs:
             PROMPT_FILE="reviewer-nonfunctional.md"
           fi
 
-          claude -p --allowedTools "Read,Bash,Grep,Glob" \
-            "You are in the ${{ matrix.perspective }} phase.
-            Read prompts/${PROMPT_FILE} for your instructions.
-            Read AGENTS.md for project context.
+          cat <<PROMPT | claude -p --allowedTools "Read,Bash,Grep,Glob" -
+          You are in the ${{ matrix.perspective }} phase.
+          Read prompts/${PROMPT_FILE} for your instructions.
+          Read AGENTS.md for project context.
 
-            Review the changes on this branch (use git diff main...HEAD).
-            Post your findings as a comment on issue #${{ github.event.issue.number }} using gh issue comment."
+          Review the changes on this branch (use git diff main...HEAD).
+          Post your findings as a comment on issue #${{ github.event.issue.number }} using gh issue comment.
+          PROMPT
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
