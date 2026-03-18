@@ -1,0 +1,12 @@
+version: "1"
+project:
+  name: "agentic-harness"
+  language: "bash"
+execution:
+  post_commands:
+    - "bash -n scripts/lint-formatter.sh"
+    - "bash -n scripts/run-ci-checks.sh"
+    - "bash -n scripts/jira-helpers.sh"
+    - "bash -n examples/structural-tests/check-layer-imports.sh"
+    - "bash -n examples/structural-tests/check-domain-boundaries.sh"
+    - "bash -n init/setup.sh"
