@@ -149,7 +149,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push branch
-        run: git push origin ${{ steps.branch.outputs.name }} --force
+        run: |
+          # Delete remote branch if it exists from a previous run
+          git push origin --delete ${{ steps.branch.outputs.name }} 2>/dev/null || true
+          git push origin ${{ steps.branch.outputs.name }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
