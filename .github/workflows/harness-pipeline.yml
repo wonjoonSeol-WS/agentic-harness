@@ -116,6 +116,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Create branch
+        id: branch
+        run: |
+          BRANCH="harness/${{ github.event.issue.number }}"
+          git checkout -b "$BRANCH"
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code
 
@@ -133,18 +140,16 @@ jobs:
 
           ${ISSUE_BODY}
 
-          Create a new branch, write the code, run verification commands, fix failures, commit and push.
+          You are on branch ${{ steps.branch.outputs.name }}.
+          Write the code, run verification commands, fix failures, then commit.
+          Do NOT push — the workflow handles that.
           PROMPT
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push branch
-        id: branch
-        run: |
-          BRANCH="$(git branch --show-current)"
-          git push origin "$BRANCH" --force-with-lease 2>/dev/null || git push origin HEAD:"harness/${{ github.event.issue.number }}" && BRANCH="harness/${{ github.event.issue.number }}"
-          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+        run: git push origin ${{ steps.branch.outputs.name }} --force-with-lease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
