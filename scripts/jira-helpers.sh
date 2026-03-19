@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # =============================================================================
-# jira-helpers.sh — Lightweight Jira access for agents via REST API.
+# jira-helpers.sh — Jira/Confluence access for agents in CI.
 #
-# Provides bash functions the agent can call to read Jira tickets dynamically.
-# Uses API token auth (no daily re-authentication, works in CI).
+# Prefers Atlassian ACLI (Cloud) when available, falls back to curl (Data Center).
+# Uses API token auth — no daily re-authentication.
 #
 # Auth env vars (set as GitHub Secrets):
-#   JIRA_BASE_URL   — e.g., https://your-org.atlassian.net
-#   JIRA_AUTH_TYPE   — "cloud" (email+token) or "datacenter" (PAT). Default: cloud
+#   JIRA_BASE_URL    — e.g., https://your-org.atlassian.net
+#   JIRA_AUTH_TYPE   — "cloud" (default) or "datacenter"
 #   JIRA_EMAIL       — Jira account email (cloud only)
 #   JIRA_API_TOKEN   — API token (cloud) or personal access token (datacenter)
+#
+# ACLI auth (cloud only, auto-detected):
+#   If `acli` is installed, uses it instead of curl for richer output.
+#   Install: npm install -g @atlassian/acli
+#   Auth:    echo "$JIRA_API_TOKEN" | acli jira auth login --email $JIRA_EMAIL --site $JIRA_SITE --token
 #
 # Usage: source this file, then call jira-read, jira-search, jira-comments
 # =============================================================================
@@ -18,23 +23,32 @@ _jira_configured() {
   [[ -n "${JIRA_BASE_URL:-}" && -n "${JIRA_API_TOKEN:-}" ]]
 }
 
+_acli_available() {
+  command -v acli &>/dev/null && [[ "${JIRA_AUTH_TYPE:-cloud}" == "cloud" ]]
+}
+
+_acli_ensure_auth() {
+  # Login if not already authenticated
+  acli jira auth status &>/dev/null && return 0
+  local site="${JIRA_BASE_URL#https://}"
+  echo "${JIRA_API_TOKEN}" | acli jira auth login --email "${JIRA_EMAIL}" --site "${site}" --token 2>/dev/null
+}
+
 _jira_curl() {
   local endpoint="$1"
   local url="${JIRA_BASE_URL}/rest/api/3/${endpoint}"
   local auth_type="${JIRA_AUTH_TYPE:-cloud}"
 
   if [[ "$auth_type" == "datacenter" ]]; then
-    # Jira Server/Data Center: personal access token
     curl -sf -H "Authorization: Bearer ${JIRA_API_TOKEN}" \
       -H "Content-Type: application/json" "$url"
   else
-    # Jira Cloud: email + API token (basic auth)
     curl -sf -u "${JIRA_EMAIL}:${JIRA_API_TOKEN}" \
       -H "Content-Type: application/json" "$url"
   fi
 }
 
-# Read a Jira ticket — returns summary, description, status, priority, linked issues
+# Read a Jira ticket
 jira-read() {
   local key="$1"
   if ! _jira_configured; then
@@ -42,13 +56,21 @@ jira-read() {
     return 1
   fi
 
+  # Prefer ACLI for Cloud
+  if _acli_available; then
+    _acli_ensure_auth || { echo "[jira] ACLI auth failed, falling back to curl"; }
+    if acli jira issue view "$key" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  # Fallback: curl (works for both Cloud and Data Center)
   local response
-  response="$(_jira_curl "issue/${key}?fields=summary,description,status,priority,issuelinks,comment&expand=renderedFields")" || {
+  response="$(_jira_curl "issue/${key}?fields=summary,description,status,priority,issuelinks&expand=renderedFields")" || {
     echo "[jira] Failed to fetch ${key}"
     return 1
   }
 
-  # Output human-readable summary
   echo "$response" | jq -r '
     "## " + .key + ": " + .fields.summary,
     "",
@@ -68,7 +90,7 @@ jira-read() {
   ' 2>/dev/null || echo "$response" | jq '.'
 }
 
-# Search Jira with JQL — returns key, summary, status for each match
+# Search Jira with JQL
 jira-search() {
   local jql="$1"
   local max="${2:-10}"
@@ -77,6 +99,15 @@ jira-search() {
     return 1
   fi
 
+  # Prefer ACLI for Cloud
+  if _acli_available; then
+    _acli_ensure_auth 2>/dev/null
+    if acli jira issue search "$jql" --limit "$max" 2>/dev/null; then
+      return 0
+    fi
+  fi
+
+  # Fallback: curl
   local encoded_jql
   encoded_jql="$(printf '%s' "$jql" | python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.stdin.read()))")"
 
@@ -119,7 +150,7 @@ jira-comments() {
   '
 }
 
-# Read a Confluence page by ID (useful when Jira tickets link to wiki pages)
+# Read a Confluence page by ID
 confluence-read() {
   local page_id="$1"
   if ! _jira_configured; then
