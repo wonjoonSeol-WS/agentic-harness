@@ -149,7 +149,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push branch
-        run: git push origin ${{ steps.branch.outputs.name }} --force-with-lease
+        run: git push origin ${{ steps.branch.outputs.name }} --force
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
