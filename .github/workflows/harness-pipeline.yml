@@ -43,11 +43,16 @@ jobs:
                 return;
               }
               const body = (payload.comment?.body || '').toLowerCase();
-              if (['/approve', 'approved', 'lgtm'].some(w => body.includes(w)) && labels.includes('harness:planning')) {
+              if (!labels.includes('harness:planning')) {
+                core.setOutput('should_run', 'false');
+                return;
+              }
+              if (['/approve', 'approved', 'lgtm'].some(w => body.includes(w))) {
                 core.setOutput('should_run', 'true');
                 core.setOutput('phase', 'execute');
               } else {
-                core.setOutput('should_run', 'false');
+                core.setOutput('should_run', 'true');
+                core.setOutput('phase', 'revise-plan');
               }
               return;
             }
@@ -90,6 +95,47 @@ jobs:
           gh issue comment ${{ github.event.issue.number }} --body 'your plan here'
 
           End the comment with: Reply with /approve to start execution.
+          PROMPT
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  revise-plan:
+    name: Revise Plan
+    needs: gate
+    if: needs.gate.outputs.should_run == 'true' && needs.gate.outputs.phase == 'revise-plan'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Plan Revision Agent
+        run: |
+          ISSUE_BODY=$(gh issue view ${{ github.event.issue.number }} --json body -q .body)
+          ISSUE_TITLE=$(gh issue view ${{ github.event.issue.number }} --json title -q .title)
+          COMMENTS=$(gh issue view ${{ github.event.issue.number }} --json comments -q '.comments[] | "### \(.author.login) (\(.createdAt)):\n\(.body)\n"')
+
+          cat <<PROMPT | claude -p --allowedTools "Read,Bash,Grep,Glob" -
+          You are in the PLAN REVISION phase.
+          Read prompts/planner.md for your full instructions.
+          Read AGENTS.md and harness.yml for project context.
+
+          Issue #${{ github.event.issue.number }}: ${ISSUE_TITLE}
+
+          ${ISSUE_BODY}
+
+          ## Previous comments (including your prior plan and human feedback):
+          ${COMMENTS}
+
+          A human reviewer has provided feedback on the plan. Your job:
+          1. Read all previous comments to find your last posted plan and the human's feedback.
+          2. Revise the plan to address the feedback.
+          3. Post the revised plan as a NEW comment on issue #${{ github.event.issue.number }} using:
+             gh issue comment ${{ github.event.issue.number }} --body 'your revised plan here'
+          4. End the comment with: Reply with /approve to start execution, or provide additional feedback.
           PROMPT
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -219,8 +265,8 @@ jobs:
 
   report-failure:
     name: Report Failure
-    needs: [gate, plan, execute, review, create-pr]
-    if: always() && (needs.plan.result == 'failure' || needs.execute.result == 'failure' || needs.review.result == 'failure' || needs.create-pr.result == 'failure')
+    needs: [gate, plan, revise-plan, execute, review, create-pr]
+    if: always() && (needs.plan.result == 'failure' || needs.revise-plan.result == 'failure' || needs.execute.result == 'failure' || needs.review.result == 'failure' || needs.create-pr.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - name: Post failure comment
